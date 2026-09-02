@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Menu } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ChatInterface from '../chat/ChatInterface';
 import RecommendationFeed from '../recommendations/RecommendationFeed';
@@ -40,8 +41,31 @@ export default function AppLayout() {
 
   const { isAuthModalOpen, setIsAuthModalOpen, currentUser } = useAuth();
 
-  // Mobile navigation tab state: 'chat' | 'properties' | 'saved' | 'insights' | 'seller_cms' | 'broker_cms' | 'profile'
+  // Mobile navigation state
   const [mobileTab, setMobileTab] = useState('chat');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Desktop sidebar resizing and collapse state
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('proppilot_sidebar_width');
+      if (saved) return Math.max(190, Math.min(parseInt(saved, 10), 480));
+    } catch {}
+    return 260;
+  });
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('proppilot_sidebar_collapsed') === 'true';
+    } catch {}
+    return false;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('proppilot_sidebar_collapsed', isSidebarCollapsed.toString());
+    } catch {}
+  }, [isSidebarCollapsed]);
 
   const toggleDashboard = () => {
     setRightPanelMode(prev => prev === 'feed' ? 'dashboard' : 'feed');
@@ -54,7 +78,7 @@ export default function AppLayout() {
 
       {/* ========================================================================= */}
       {/* 📱 MOBILE VIEW (Phones & Small Viewports: < 768px / md)                   */}
-      {/* Native full-screen mobile app layout with bottom navigation               */}
+      {/* Native full-screen mobile app layout with slide-out drawer & bottom nav   */}
       {/* ========================================================================= */}
       <div className="md:hidden flex flex-col w-full h-[100dvh] bg-white overflow-hidden relative">
         
@@ -64,21 +88,30 @@ export default function AppLayout() {
           {/* TAB 1: Chat Hub (Home) */}
           {mobileTab === 'chat' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-              {/* Mobile Top Header */}
+              {/* Mobile Top Header with Hamburger & Logo */}
               <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between bg-white/95 backdrop-blur-md shrink-0 z-20">
-                <div className="flex items-center space-x-2 cursor-pointer" onClick={handleNewChat}>
-                  <img 
-                    src="/logo.png" 
-                    alt="PropPilot" 
-                    className="h-7 w-auto object-contain" 
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
-                  <div className="hidden items-center space-x-1.5">
-                    <span className="font-bold text-base text-slate-900">PropPilot</span>
-                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-600 rounded">AI</span>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors"
+                    title="Open Navigation Menu"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  <div className="flex items-center cursor-pointer" onClick={handleNewChat}>
+                    <img 
+                      src="/logo.png" 
+                      alt="PropPilot" 
+                      className="h-7 w-auto object-contain" 
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <div className="hidden items-center space-x-1.5">
+                      <span className="font-bold text-base text-slate-900">PropPilot</span>
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-600 rounded">AI</span>
+                    </div>
                   </div>
                 </div>
 
@@ -114,17 +147,37 @@ export default function AppLayout() {
           {/* TAB 2: Properties Feed */}
           {mobileTab === 'properties' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-              <RecommendationFeed
-                properties={filteredProperties}
-                savedPropertyIds={savedPropertyIds}
-                activeFilters={activeFilters}
-                onClearFilter={clearFilter}
-                onClearAllFilters={clearAllFilters}
-                onToggleSave={toggleSaveProperty}
-                onSelectProperty={(prop) => setSelectedProperty(prop)}
-                onToggleDashboard={() => setMobileTab('insights')}
-                rightPanelMode="feed"
-              />
+              <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  <h2 className="font-bold text-base text-slate-900">Explore Properties</h2>
+                </div>
+                <button
+                  onClick={() => setMobileTab('insights')}
+                  className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-xl"
+                >
+                  Insights
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-hidden">
+                <RecommendationFeed
+                  properties={filteredProperties}
+                  savedPropertyIds={savedPropertyIds}
+                  activeFilters={activeFilters}
+                  onClearFilter={clearFilter}
+                  onClearAllFilters={clearAllFilters}
+                  onToggleSave={toggleSaveProperty}
+                  onSelectProperty={(prop) => setSelectedProperty(prop)}
+                  onToggleDashboard={() => setMobileTab('insights')}
+                  rightPanelMode="feed"
+                />
+              </div>
             </div>
           )}
 
@@ -132,7 +185,15 @@ export default function AppLayout() {
           {mobileTab === 'saved' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-                <h2 className="font-bold text-base text-slate-900">Saved Properties ({savedPropertyIds.size})</h2>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => setIsMobileMenuOpen(true)}
+                    className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  <h2 className="font-bold text-base text-slate-900">Saved ({savedPropertyIds.size})</h2>
+                </div>
                 <span className="text-xs text-indigo-600 font-semibold cursor-pointer" onClick={() => setMobileTab('properties')}>
                   Browse More
                 </span>
@@ -161,10 +222,21 @@ export default function AppLayout() {
           {/* TAB 4: Market Insights Dashboard */}
           {mobileTab === 'insights' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-              <AnalyticsDashboard
-                onBackToFeed={() => setMobileTab('properties')}
-                insightsMetrics={insightsMetrics}
-              />
+              <div className="h-14 px-4 border-b border-slate-100 flex items-center space-x-2 bg-white shrink-0">
+                <button 
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xl"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <h2 className="font-bold text-base text-slate-900">Market Intelligence</h2>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <AnalyticsDashboard
+                  onBackToFeed={() => setMobileTab('properties')}
+                  insightsMetrics={insightsMetrics}
+                />
+              </div>
             </div>
           )}
 
@@ -216,18 +288,62 @@ export default function AppLayout() {
         <BottomNav
           activeTab={mobileTab}
           onTabChange={(tab) => setMobileTab(tab)}
+          onOpenMenu={() => setIsMobileMenuOpen(true)}
           savedCount={savedPropertyIds.size}
         />
+
+        {/* Mobile Slide-Out Drawer Sidebar with Backdrop */}
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-[999] flex md:hidden animate-in fade-in duration-200">
+            <div 
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+            <div className="relative w-[300px] max-w-[85vw] h-full bg-white shadow-2xl z-10 animate-in slide-in-from-left duration-300 flex flex-col">
+              <Sidebar
+                isMobile={true}
+                onCloseMobile={() => setIsMobileMenuOpen(false)}
+                activeNav={activeNav}
+                setActiveNav={(nav) => {
+                  setActiveNav(nav);
+                  if (nav === 'chats') setMobileTab('chat');
+                  else if (nav === 'properties') setMobileTab('properties');
+                  else if (nav === 'saved') setMobileTab('saved');
+                  else if (nav === 'insights') setMobileTab('insights');
+                  else if (nav === 'seller_cms') setMobileTab('seller_cms');
+                  else if (nav === 'broker_cms') setMobileTab('broker_cms');
+                  setIsMobileMenuOpen(false);
+                }}
+                onNewChat={() => {
+                  handleNewChat();
+                  setMobileTab('chat');
+                  setIsMobileMenuOpen(false);
+                }}
+                savedCount={savedPropertyIds.size}
+                onToggleDashboard={() => {
+                  setMobileTab('insights');
+                  setIsMobileMenuOpen(false);
+                }}
+                rightPanelMode={rightPanelMode}
+              />
+            </div>
+          </div>
+        )}
+
       </div>
 
       {/* ========================================================================= */}
       {/* 💻 NATIVE FULL-PAGE DESKTOP VIEW (Screen >= 768px / md)                    */}
-      {/* Expands to utilize the full viewport width and height natively             */}
+      {/* Resizable and collapsible sidebar with drag handle                         */}
       {/* ========================================================================= */}
       <div className="hidden md:flex w-full h-full overflow-hidden relative">
         
-        {/* Column 1: Left Navigation Sidebar */}
+        {/* Column 1: Left Resizable Navigation Sidebar */}
         <Sidebar
+          sidebarWidth={sidebarWidth}
+          setSidebarWidth={setSidebarWidth}
+          isCollapsed={isSidebarCollapsed}
+          setIsCollapsed={setIsSidebarCollapsed}
           activeNav={activeNav}
           setActiveNav={setActiveNav}
           onNewChat={handleNewChat}
