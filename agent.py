@@ -450,6 +450,128 @@ def create_api_app():
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+    # ========================================================================
+    # CROSS-DEVICE REAL-TIME STATE SYNCHRONIZATION
+    # ========================================================================
+    from fastapi import WebSocket, WebSocketDisconnect
+    import time
+
+    STATE_FILE = "synced_global_state.json"
+
+    def load_persisted_state():
+        if os.path.exists(STATE_FILE):
+            try:
+                with open(STATE_FILE, "r") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {
+            "activeFilters": {},
+            "messages": [],
+            "savedPropertyIds": [],
+            "currentMapLocation": {"lat": 12.9141, "lng": 74.8560, "zoom": 12},
+            "selectedPropertyId": None,
+            "role": "user",
+            "activeTab": "chat",
+            "updatedAt": None,
+            "sourceDevice": "server_init"
+        }
+
+    def save_persisted_state(state):
+        try:
+            with open(STATE_FILE, "w") as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            print(f"Error saving persisted state: {e}")
+
+    class SyncConnectionManager:
+        def __init__(self):
+            self.active_connections: Dict[str, List[WebSocket]] = {}
+
+        async def connect(self, websocket: WebSocket, session_id: str):
+            await websocket.accept()
+            if session_id not in self.active_connections:
+                self.active_connections[session_id] = []
+            self.active_connections[session_id].append(websocket)
+
+        def disconnect(self, websocket: WebSocket, session_id: str):
+            if session_id in self.active_connections:
+                if websocket in self.active_connections[session_id]:
+                    self.active_connections[session_id].remove(websocket)
+                if not self.active_connections[session_id]:
+                    del self.active_connections[session_id]
+
+        async def broadcast(self, message: dict, session_id: str, exclude_socket: Optional[WebSocket] = None):
+            if session_id in self.active_connections:
+                for connection in list(self.active_connections[session_id]):
+                    if connection != exclude_socket:
+                        try:
+                            await connection.send_json(message)
+                        except Exception:
+                            self.disconnect(connection, session_id)
+
+    sync_manager = SyncConnectionManager()
+    current_global_state = load_persisted_state()
+
+    @api.get("/api/sync/state")
+    def get_sync_state(sessionId: str = "default_session"):
+        return {"sessionId": sessionId, "state": current_global_state}
+
+    @api.post("/api/sync/state")
+    async def post_sync_state(payload: Dict[str, Any], sessionId: str = "default_session"):
+        nonlocal current_global_state
+        state_update = payload.get("state", payload)
+        source = payload.get("source", "rest_client")
+        current_global_state.update(state_update)
+        current_global_state["updatedAt"] = time.time()
+        current_global_state["sourceDevice"] = source
+        save_persisted_state(current_global_state)
+
+        await sync_manager.broadcast({
+            "type": "STATE_BROADCAST",
+            "state": current_global_state,
+            "source": source,
+            "timestamp": current_global_state["updatedAt"]
+        }, session_id=sessionId)
+
+        return {"status": "ok", "synced": True, "state": current_global_state}
+
+    @api.websocket("/ws/sync/{session_id}")
+    async def websocket_sync_endpoint(websocket: WebSocket, session_id: str):
+        nonlocal current_global_state
+        await sync_manager.connect(websocket, session_id)
+        try:
+            # Send current synchronized state upon connection
+            await websocket.send_json({
+                "type": "INITIAL_STATE",
+                "state": current_global_state,
+                "clientCount": len(sync_manager.active_connections.get(session_id, []))
+            })
+
+            while True:
+                data = await websocket.receive_json()
+                msg_type = data.get("type", "STATE_UPDATE")
+                payload_state = data.get("payload", {})
+                source = data.get("source", "unknown_device")
+
+                current_global_state.update(payload_state)
+                current_global_state["updatedAt"] = time.time()
+                current_global_state["sourceDevice"] = source
+                save_persisted_state(current_global_state)
+
+                # Real-time broadcast to all other devices (laptop <-> phone)
+                await sync_manager.broadcast({
+                    "type": "REMOTE_STATE_UPDATED",
+                    "state": current_global_state,
+                    "source": source,
+                    "timestamp": current_global_state["updatedAt"]
+                }, session_id=session_id, exclude_socket=websocket)
+
+        except WebSocketDisconnect:
+            sync_manager.disconnect(websocket, session_id)
+        except Exception:
+            sync_manager.disconnect(websocket, session_id)
+
     return api
 
 
