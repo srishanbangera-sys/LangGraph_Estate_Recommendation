@@ -1,8 +1,5 @@
 {
-  "activeFilters": {
-    "location": "Mangalore",
-    "bhk": 3
-  },
+  "activeFilters": {},
   "messages": [],
   "savedPropertyIds": [],
   "currentMapLocation": {
@@ -13,6 +10,6 @@
   "selectedPropertyId": null,
   "role": "user",
   "activeTab": "chat",
-  "updatedAt": 1788331227.9742646,
-  "sourceDevice": "test_script"
+  "updatedAt": 1788331469.9820187,
+  "sourceDevice": "web:device_pt5w9n3"
 }
