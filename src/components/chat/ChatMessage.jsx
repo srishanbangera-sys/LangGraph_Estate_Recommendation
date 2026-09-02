@@ -2,7 +2,7 @@ import React from 'react';
 import { Home, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
 import CleanMarkdownText from './CleanMarkdownText';
 
-export default function ChatMessage({ message, onSelectProperty, allProperties = [] }) {
+export default function ChatMessage({ message, onSelectProperty, onActionClick, allProperties = [] }) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
 
@@ -50,7 +50,11 @@ export default function ChatMessage({ message, onSelectProperty, allProperties =
             {isUser ? (
               <div className="whitespace-pre-wrap font-medium">{message.content}</div>
             ) : (
-              <CleanMarkdownText content={message.content} isStreaming={message.isStreaming} />
+              <CleanMarkdownText 
+                content={message.content} 
+                isStreaming={message.isStreaming} 
+                onActionClick={onActionClick}
+              />
             )}
           </div>
 

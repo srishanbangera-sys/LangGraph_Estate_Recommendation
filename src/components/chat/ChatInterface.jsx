@@ -98,6 +98,7 @@ export default function ChatInterface({
                 key={msg.id}
                 message={msg}
                 onSelectProperty={onSelectProperty}
+                onActionClick={(actionText) => onSendMessage(actionText)}
                 allProperties={properties}
               />
             ))}
