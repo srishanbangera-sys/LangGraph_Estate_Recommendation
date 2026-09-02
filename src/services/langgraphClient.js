@@ -36,7 +36,7 @@ export async function streamLangGraphResponse({
 }) {
   const controller = new AbortController();
 
-  // If a real LangGraph API endpoint is provided, use the SSE / streaming reader:
+  // If LangGraph API endpoint is provided, try real SSE streaming first:
   if (LANGGRAPH_API_URL) {
     try {
       const response = await fetch(`${LANGGRAPH_API_URL}/stream`, {
@@ -45,6 +45,7 @@ export async function streamLangGraphResponse({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          message,
           input: {
             messages: [
               ...history.map(m => ({ role: m.role, content: m.content })),
@@ -68,13 +69,13 @@ export async function streamLangGraphResponse({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let accumulatedText = '';
+      let retrievedProps = [];
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
         const rawChunk = decoder.decode(value, { stream: true });
-        // Handle Server-Sent Event or JSON lines format from LangGraph
         const lines = rawChunk.split('\n').filter(line => line.trim() !== '');
         for (const line of lines) {
           try {
@@ -87,6 +88,9 @@ export async function streamLangGraphResponse({
               if (data.tool_call) {
                 onToolCall?.(data.tool_call.name, data.tool_call.args);
               }
+              if (data.properties) {
+                retrievedProps = data.properties;
+              }
             } else {
               accumulatedText += line;
               onChunk?.(line);
@@ -98,14 +102,15 @@ export async function streamLangGraphResponse({
         }
       }
 
-      onComplete?.(accumulatedText);
+      onComplete?.(accumulatedText, retrievedProps);
+      return () => controller.abort();
     } catch (err) {
-      if (err.name !== 'AbortError') {
-        onError?.(err);
+      if (err.name === 'AbortError') {
+        return () => {};
       }
+      console.warn(`[PropPilot] Backend connection to ${LANGGRAPH_API_URL} not available. Falling back to local engine:`, err.message);
+      // Fall through to local simulated engine below
     }
-
-    return () => controller.abort();
   }
 
   // --- LOCAL SIMULATED LANGGRAPH STREAMING ENGINE ---
