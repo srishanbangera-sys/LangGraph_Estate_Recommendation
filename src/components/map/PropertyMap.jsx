@@ -11,25 +11,35 @@ const DEFAULT_ZOOM = 13;
 export default function PropertyMap({ 
   properties = [], 
   onSelectProperty,
+  currentLocation = null,
+  onMapMove = null,
   className = "w-full h-full min-h-[350px]"
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersLayerRef = useRef(null);
+  const isMovingFromRemote = useRef(false);
 
   // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Create Map
+    // Create Map with touch gestures optimized
+    const initialCenter = currentLocation ? [currentLocation.lat, currentLocation.lng] : DEFAULT_CENTER;
+    const initialZoom = currentLocation ? currentLocation.zoom : DEFAULT_ZOOM;
+
     const map = L.map(mapContainerRef.current, {
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
+      center: initialCenter,
+      zoom: initialZoom,
       zoomControl: true,
-      attributionControl: false
+      attributionControl: false,
+      tap: true,
+      touchZoom: true,
+      dragging: true,
+      bounceAtZoomLimits: false
     });
 
-    // Add CartoDB Positron / OSM clean tiles
+    // Add CartoDB Positron clean tiles
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
       subdomains: 'abcd',
@@ -40,11 +50,50 @@ export default function PropertyMap({
     markersLayerRef.current = markersLayer;
     mapInstanceRef.current = map;
 
+    // Listen for local map moves to synchronize across devices
+    map.on('moveend', () => {
+      if (isMovingFromRemote.current) return;
+      if (onMapMove) {
+        const center = map.getCenter();
+        const zoom = map.getZoom();
+        onMapMove({ lat: center.lat, lng: center.lng, zoom });
+      }
+    });
+
+    // Invalidate map size to handle responsive container / sidebar resizing
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(mapContainerRef.current);
+
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 200);
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Synchronize remote map movements from other devices
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !currentLocation) return;
+
+    const cur = map.getCenter();
+    const curZoom = map.getZoom();
+    const dist = Math.abs(cur.lat - currentLocation.lat) + Math.abs(cur.lng - currentLocation.lng);
+    
+    if (dist > 0.005 || curZoom !== currentLocation.zoom) {
+      isMovingFromRemote.current = true;
+      map.setView([currentLocation.lat, currentLocation.lng], currentLocation.zoom, { animate: true });
+      setTimeout(() => {
+        isMovingFromRemote.current = false;
+      }, 500);
+    }
+  }, [currentLocation]);
 
   // Update Markers whenever filtered properties change
   useEffect(() => {
@@ -141,27 +190,27 @@ export default function PropertyMap({
     });
 
     // Auto-fit Bounds to strictly mirror filtered properties
-    if (hasCoords && properties.length > 0) {
+    if (hasCoords && properties.length > 0 && !currentLocation) {
       map.fitBounds(bounds, {
         padding: [50, 50],
         maxZoom: 15,
         animate: true,
         duration: 0.8
       });
-    } else {
-      // Default to Mangalore, India
-      map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: true });
     }
   }, [properties, onSelectProperty]);
 
   const handleResetToMangalore = () => {
     if (mapInstanceRef.current) {
       mapInstanceRef.current.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: true });
+      if (onMapMove) {
+        onMapMove({ lat: DEFAULT_CENTER[0], lng: DEFAULT_CENTER[1], zoom: DEFAULT_ZOOM });
+      }
     }
   };
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden shadow-inner border border-slate-200 ${className}`}>
+    <div className={`relative rounded-2xl overflow-hidden shadow-inner border border-slate-200 touch-pan-x touch-pan-y ${className}`}>
       {/* Map Container */}
       <div ref={mapContainerRef} className="w-full h-full min-h-[300px]" />
 

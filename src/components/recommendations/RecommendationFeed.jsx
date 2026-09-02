@@ -13,6 +13,8 @@ export default function RecommendationFeed({
   onSelectProperty,
   onToggleDashboard,
   rightPanelMode,
+  currentLocation = null,
+  onMapMove = null,
 }) {
   const [showMapModal, setShowMapModal] = useState(false);
 
@@ -126,6 +128,8 @@ export default function RecommendationFeed({
             <PropertyMap
               properties={properties}
               onSelectProperty={onSelectProperty}
+              currentLocation={currentLocation}
+              onMapMove={onMapMove}
               className="w-full h-full"
             />
           </div>
