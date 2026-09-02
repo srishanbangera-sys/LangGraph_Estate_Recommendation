@@ -1,5 +1,6 @@
 import React from 'react';
 import { Home, Sparkles, AlertCircle, Copy, Check } from 'lucide-react';
+import CleanMarkdownText from './CleanMarkdownText';
 
 export default function ChatMessage({ message, onSelectProperty, allProperties = [] }) {
   const isUser = message.role === 'user';
@@ -46,12 +47,11 @@ export default function ChatMessage({ message, onSelectProperty, allProperties =
             }`}
           >
             {/* Formatted Content */}
-            <div className="whitespace-pre-wrap">
-              {message.content}
-              {message.isStreaming && (
-                <span className="inline-block w-2 h-4 ml-1 bg-indigo-500 animate-cursor-blink align-middle rounded-sm" />
-              )}
-            </div>
+            {isUser ? (
+              <div className="whitespace-pre-wrap font-medium">{message.content}</div>
+            ) : (
+              <CleanMarkdownText content={message.content} isStreaming={message.isStreaming} />
+            )}
           </div>
 
           {/* Recommended property quick-links if attached */}

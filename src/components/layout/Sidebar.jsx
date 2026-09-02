@@ -38,13 +38,25 @@ export default function Sidebar({
       {/* Top Section: Logo & Nav */}
       <div className="flex flex-col space-y-7">
         {/* Logo */}
-        <div className="flex items-center space-x-2.5 px-1 cursor-pointer" onClick={onNewChat}>
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-md shadow-indigo-100">
-            <HomeIcon className="w-4 h-4 stroke-[2.2]" />
-          </div>
-          <div className="flex items-center">
-            <span className="font-bold text-xl tracking-tight text-slate-900">PropPilot</span>
-            <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-600 rounded-md">AI</span>
+        <div className="flex items-center cursor-pointer px-1 py-0.5" onClick={onNewChat} title="PropPilot AI">
+          <img 
+            src="/logo.png" 
+            alt="PropPilot" 
+            className="h-10 w-auto max-w-[195px] object-contain transition-transform hover:scale-[1.02]"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.style.display = 'none';
+              if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+            }}
+          />
+          <div className="hidden items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center text-white shadow-md">
+              <HomeIcon className="w-4 h-4 stroke-[2.2]" />
+            </div>
+            <div className="flex items-center">
+              <span className="font-bold text-xl tracking-tight text-slate-900">PropPilot</span>
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-600 rounded-md">AI</span>
+            </div>
           </div>
         </div>
 
