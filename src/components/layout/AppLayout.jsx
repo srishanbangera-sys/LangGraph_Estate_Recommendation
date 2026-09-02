@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import ChatInterface from '../chat/ChatInterface';
 import RecommendationFeed from '../recommendations/RecommendationFeed';
@@ -15,6 +15,11 @@ export default function AppLayout() {
     setInputValue,
     isStreaming,
     properties,
+    filteredProperties,
+    activeFilters,
+    clearFilter,
+    clearAllFilters,
+    insightsMetrics,
     savedPropertyIds,
     selectedProperty,
     setSelectedProperty,
@@ -38,7 +43,7 @@ export default function AppLayout() {
   const savedPropertiesList = properties.filter(p => savedPropertyIds.has(p.id));
 
   return (
-    <div className="w-full min-h-screen bg-[#e8ecf4] flex items-center justify-center">
+    <div className="w-screen h-screen overflow-hidden flex bg-white font-sans text-slate-900">
 
       {/* ========================================================================= */}
       {/* 📱 MOBILE VIEW (Phones & Small Viewports: < 768px / md)                   */}
@@ -54,12 +59,20 @@ export default function AppLayout() {
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               {/* Mobile Top Header */}
               <div className="h-14 px-4 border-b border-slate-100 flex items-center justify-between bg-white/95 backdrop-blur-md shrink-0 z-20">
-                <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-xs">
-                    <span className="font-extrabold text-xs">P</span>
+                <div className="flex items-center space-x-2 cursor-pointer" onClick={handleNewChat}>
+                  <img 
+                    src="/logo.png" 
+                    alt="PropPilot" 
+                    className="h-7 w-auto object-contain" 
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="hidden items-center space-x-1.5">
+                    <span className="font-bold text-base text-slate-900">PropPilot</span>
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-600 rounded">AI</span>
                   </div>
-                  <span className="font-bold text-base text-slate-900">PropPilot</span>
-                  <span className="px-1.5 py-0.5 text-[9px] font-bold bg-indigo-50 text-indigo-600 rounded">AI</span>
                 </div>
 
                 <div 
@@ -84,7 +97,7 @@ export default function AppLayout() {
                   onSendMessage={handleSendMessage}
                   onSelectPrompt={handleSelectPrompt}
                   onResetChat={handleNewChat}
-                  properties={properties}
+                  properties={filteredProperties}
                   onSelectProperty={(prop) => setSelectedProperty(prop)}
                 />
               </div>
@@ -95,8 +108,11 @@ export default function AppLayout() {
           {mobileTab === 'properties' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               <RecommendationFeed
-                properties={properties}
+                properties={filteredProperties}
                 savedPropertyIds={savedPropertyIds}
+                activeFilters={activeFilters}
+                onClearFilter={clearFilter}
+                onClearAllFilters={clearAllFilters}
                 onToggleSave={toggleSaveProperty}
                 onSelectProperty={(prop) => setSelectedProperty(prop)}
                 onToggleDashboard={() => setMobileTab('insights')}
@@ -119,6 +135,7 @@ export default function AppLayout() {
                   <RecommendationFeed
                     properties={savedPropertiesList}
                     savedPropertyIds={savedPropertyIds}
+                    activeFilters={{}}
                     onToggleSave={toggleSaveProperty}
                     onSelectProperty={(prop) => setSelectedProperty(prop)}
                     onToggleDashboard={() => setMobileTab('insights')}
@@ -139,6 +156,7 @@ export default function AppLayout() {
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               <AnalyticsDashboard
                 onBackToFeed={() => setMobileTab('properties')}
+                insightsMetrics={insightsMetrics}
               />
             </div>
           )}
@@ -170,10 +188,10 @@ export default function AppLayout() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 💻 LAPTOP / DESKTOP VIEW (Screen >= 768px / md)                            */}
-      {/* Full 3-column desktop layout matching reference Image 1                   */}
+      {/* 💻 NATIVE FULL-PAGE DESKTOP VIEW (Screen >= 768px / md)                    */}
+      {/* Expands to utilize the full viewport width and height natively             */}
       {/* ========================================================================= */}
-      <div className="hidden md:flex w-full max-w-[1560px] h-[94vh] max-h-[960px] bg-white rounded-3xl shadow-float border border-slate-200/70 overflow-hidden relative m-3 lg:m-4">
+      <div className="hidden md:flex w-full h-full overflow-hidden relative">
         
         {/* Column 1: Left Navigation Sidebar */}
         <Sidebar
@@ -195,17 +213,20 @@ export default function AppLayout() {
             onSendMessage={handleSendMessage}
             onSelectPrompt={handleSelectPrompt}
             onResetChat={handleNewChat}
-            properties={properties}
+            properties={filteredProperties}
             onSelectProperty={(prop) => setSelectedProperty(prop)}
           />
         </div>
 
         {/* Column 3: Right Dynamic Recommendations or Analytics Dashboard */}
-        <div className="w-[380px] lg:w-[420px] xl:w-[460px] shrink-0 h-full bg-white flex flex-col">
+        <div className="w-[390px] lg:w-[430px] xl:w-[470px] shrink-0 h-full bg-white flex flex-col">
           {rightPanelMode === 'feed' ? (
             <RecommendationFeed
-              properties={properties}
+              properties={filteredProperties}
               savedPropertyIds={savedPropertyIds}
+              activeFilters={activeFilters}
+              onClearFilter={clearFilter}
+              onClearAllFilters={clearAllFilters}
               onToggleSave={toggleSaveProperty}
               onSelectProperty={(prop) => setSelectedProperty(prop)}
               onToggleDashboard={toggleDashboard}
@@ -214,6 +235,7 @@ export default function AppLayout() {
           ) : (
             <AnalyticsDashboard
               onBackToFeed={() => setRightPanelMode('feed')}
+              insightsMetrics={insightsMetrics}
             />
           )}
         </div>
