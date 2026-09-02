@@ -404,7 +404,7 @@ export default function AppLayout() {
             </div>
 
             {/* Column 3: Right Dynamic Recommendations or Analytics Dashboard */}
-            <div className="w-[390px] lg:w-[430px] xl:w-[470px] shrink-0 h-full bg-white flex flex-col">
+            <div className="w-[420px] lg:w-[470px] xl:w-[520px] 2xl:w-[560px] shrink-0 h-full bg-white flex flex-col">
               {rightPanelMode === 'feed' ? (
                 <RecommendationFeed
                   properties={filteredProperties}
