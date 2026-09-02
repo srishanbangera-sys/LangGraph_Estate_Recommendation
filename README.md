@@ -1,8 +1,8 @@
-# HomiGo - AI Real Estate Recommendation & Intelligence System 🏡✨
+# PropPilot - AI Real Estate Recommendation & Intelligence System 🏡✨
 
 A LangGraph-based Real Estate Recommendation system with a responsive, modern, lightweight React + Tailwind CSS web interface.
 
-![HomiGo Preview](https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80)
+![PropPilot Preview](https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1200&q=80)
 
 ---
 
@@ -10,7 +10,7 @@ A LangGraph-based Real Estate Recommendation system with a responsive, modern, l
 
 ### 1. Modern 3-Column Architecture
 - **Left Navigation Sidebar (`Sidebar.jsx`)**:
-  - HomiGo brand logo with AI indicator badge.
+  - PropPilot brand logo with AI indicator badge.
   - Navigation tabs: **Chats**, **Properties**, **Saved** (with live count badge), and **Market Insights**.
   - Prominent **`+ New Chat`** button to reset conversational state.
   - User profile snippet (**John**) and footer links.
@@ -125,4 +125,4 @@ src/
 ---
 
 ## 📄 License
-MIT © 2025 HomiGo, Inc.
+MIT © 2025 PropPilot, Inc.
