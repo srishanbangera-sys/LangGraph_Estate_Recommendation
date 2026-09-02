@@ -50,38 +50,68 @@ A LangGraph-based Real Estate Recommendation system with a responsive, modern, l
 - Node.js (v18+ recommended)
 - npm or yarn
 
-### Installation
+### Frontend Setup
 ```bash
-# Clone the repository
-git clone https://github.com/srishanbangera-sys/LangGraph_Estate_Recommendation.git
-cd LangGraph_Estate_Recommendation
-
-# Install dependencies
 npm install
-```
-
-### Development
-```bash
 npm run dev
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Production Build
+---
+
+## 🐍 Python LangGraph Backend Setup
+
+The RAG pipeline connects to the FAISS vector database (`index.faiss` & `index.pkl`) and uses OpenRouter's free models for intelligent conversational real estate recommendations.
+
+### 1. Activate Virtual Environment
 ```bash
-npm run build
+# On Linux/macOS:
+source venv/bin/activate
+
+# Or install dependencies into your environment:
+pip install -r requirements.txt
 ```
-*(Production bundle is ultra-lightweight: ~63.7 kB JS and 6.5 kB CSS gzipped).*
+
+### 2. Configure Environment (`.env`)
+```env
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_MODEL=openrouter/free
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+
+FAISS_INDEX_PATH=.
+FAISS_INDEX_NAME=index
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+```
+
+### 3. Run the Agent
+
+- **Interactive Terminal Chat Session**:
+  ```bash
+  python agent.py
+  ```
+
+- **One-shot Query**:
+  ```bash
+  python agent.py --query "Show me available 3 BHK apartments in Metroville"
+  ```
+
+- **Start FastAPI REST & SSE Streaming Backend Server**:
+  ```bash
+  python agent.py --serve --port 8000
+  ```
+  Endpoints:
+  - `GET  /health` - Service health status
+  - `POST /api/chat` - JSON request/response
+  - `POST /api/chat/stream` - Server-Sent Events (SSE) streaming directly connected to the React UI
 
 ---
 
-## 🔗 Connecting to LangGraph Backend
+## 🔗 Connecting React Frontend to LangGraph Backend
 
-Create a `.env` file in the root directory:
+The React client automatically connects to `http://localhost:8000`. You can configure custom endpoints in `.env`:
 ```env
-VITE_LANGGRAPH_API_URL=http://localhost:8000/api/chat
+VITE_LANGGRAPH_API_URL=http://localhost:8000
 ```
-
-The client will automatically send conversations to `${VITE_LANGGRAPH_API_URL}/stream` and process real-time tokens and tool calls.
 
 ---
 
