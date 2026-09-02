@@ -7,8 +7,10 @@
  * 2. A production-ready Fetch/SSE streaming handler for LangGraph REST/WebSocket API.
  */
 
-// Configuration: configure this in .env (e.g. VITE_LANGGRAPH_API_URL=http://localhost:8000/api/chat)
-const LANGGRAPH_API_URL = import.meta.env?.VITE_LANGGRAPH_API_URL || null;
+// Configuration: connects to FastAPI/LangGraph backend on port 8000, with graceful fallback to local engine
+const LANGGRAPH_API_URL = import.meta.env?.VITE_LANGGRAPH_API_URL !== undefined 
+  ? import.meta.env.VITE_LANGGRAPH_API_URL 
+  : 'http://localhost:8000';
 
 /**
  * Sends a conversation turn to the LangGraph backend and handles streaming response tokens.
