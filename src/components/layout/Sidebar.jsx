@@ -43,7 +43,7 @@ export default function Sidebar({
             <HomeIcon className="w-4 h-4 stroke-[2.2]" />
           </div>
           <div className="flex items-center">
-            <span className="font-bold text-xl tracking-tight text-slate-900">HomiGo</span>
+            <span className="font-bold text-xl tracking-tight text-slate-900">PropPilot</span>
             <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-600 rounded-md">AI</span>
           </div>
         </div>
