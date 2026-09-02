@@ -36,7 +36,10 @@ export default function AppLayout() {
     handleSendMessage,
     handleSelectPrompt,
     handleNewChat,
-    toggleSaveProperty
+    toggleSaveProperty,
+    currentMapLocation,
+    updateMapLocation,
+    syncStatus
   } = useLangGraphChat();
 
   const { isAuthModalOpen, setIsAuthModalOpen, currentUser } = useAuth();
@@ -115,15 +118,22 @@ export default function AppLayout() {
                   </div>
                 </div>
 
-                <div 
-                  className="flex items-center space-x-2 cursor-pointer"
-                  onClick={() => setMobileTab('profile')}
-                >
-                  <img
-                    src={currentUser.avatar}
-                    alt={currentUser.name}
-                    className="w-7 h-7 rounded-full object-cover ring-2 ring-slate-100"
-                  />
+                <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1.5 px-2 py-0.5 bg-slate-50 border border-slate-200/70 rounded-full text-[10px] font-bold">
+                    <span className={`w-1.5 h-1.5 rounded-full ${syncStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+                    <span className="text-slate-600 font-semibold">{syncStatus === 'connected' ? 'Live' : 'Syncing'}</span>
+                  </div>
+
+                  <div 
+                    className="flex items-center space-x-2 cursor-pointer"
+                    onClick={() => setMobileTab('profile')}
+                  >
+                    <img
+                      src={currentUser.avatar}
+                      alt={currentUser.name}
+                      className="w-7 h-7 rounded-full object-cover ring-2 ring-slate-100"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -176,6 +186,8 @@ export default function AppLayout() {
                   onSelectProperty={(prop) => setSelectedProperty(prop)}
                   onToggleDashboard={() => setMobileTab('insights')}
                   rightPanelMode="feed"
+                  currentLocation={currentMapLocation}
+                  onMapMove={updateMapLocation}
                 />
               </div>
             </div>
@@ -404,6 +416,8 @@ export default function AppLayout() {
                   onSelectProperty={(prop) => setSelectedProperty(prop)}
                   onToggleDashboard={toggleDashboard}
                   rightPanelMode={rightPanelMode}
+                  currentLocation={currentMapLocation}
+                  onMapMove={updateMapLocation}
                 />
               ) : (
                 <AnalyticsDashboard
