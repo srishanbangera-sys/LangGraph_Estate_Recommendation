@@ -98,16 +98,53 @@ export function useLangGraphChat() {
           return msg;
         }));
 
-        // Dynamically highlight or filter recommendations feed if returned
+        // Dynamically highlight or insert recommendations from backend / FAISS
         if (matchedPropertyIds && matchedPropertyIds.length > 0) {
-          setProperties(prev => {
-            const prioritized = [...prev].sort((a, b) => {
-              const aMatch = matchedPropertyIds.includes(a.id) ? 1 : 0;
-              const bMatch = matchedPropertyIds.includes(b.id) ? 1 : 0;
-              return bMatch - aMatch;
+          if (typeof matchedPropertyIds[0] === 'object') {
+            // Real FAISS vectorstore properties returned by agent.py
+            const mappedNewProps = matchedPropertyIds.map((item, idx) => ({
+              id: item.property_id || `prop-retrieved-${idx}`,
+              title: item.title || 'Featured Property',
+              category: item.city ? `For you in ${item.city}` : 'Recommended',
+              type: item.property_type || 'Apartment',
+              location: item.area ? `${item.area}, ${item.city}` : (item.city || 'Prime Location'),
+              country: item.city || 'Real Estate',
+              price: Number(item.price) || 2500000,
+              priceFormatted: item.price 
+                ? (Number(item.price) > 100000 ? `₹${Number(item.price).toLocaleString('en-IN')}` : `₹${Number(item.price).toLocaleString('en-IN')}/mo`)
+                : 'Price on Request',
+              beds: Number(item.bhk) || 3,
+              baths: Number(item.bathrooms) || 2,
+              sqft: item.area_sqft ? `${item.area_sqft} sqft` : 'Spacious',
+              image: [
+                'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
+                'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80'
+              ][idx % 4],
+              aiMatchScore: 96 - idx * 3,
+              tags: item.amenities ? item.amenities.split(';').slice(0, 3) : ['Verified', 'Prime'],
+              description: item.description || '',
+              amenities: item.amenities ? item.amenities.split(';') : ['Security', 'Modern'],
+              status: item.status || 'Available'
+            }));
+
+            setProperties(prev => {
+              const existingIds = new Set(mappedNewProps.map(p => p.id));
+              const remaining = prev.filter(p => !existingIds.has(p.id));
+              return [...mappedNewProps, ...remaining];
             });
-            return prioritized;
-          });
+          } else {
+            // String IDs (simulated engine)
+            setProperties(prev => {
+              const prioritized = [...prev].sort((a, b) => {
+                const aMatch = matchedPropertyIds.includes(a.id) ? 1 : 0;
+                const bMatch = matchedPropertyIds.includes(b.id) ? 1 : 0;
+                return bMatch - aMatch;
+              });
+              return prioritized;
+            });
+          }
         }
       },
       onError: (err) => {
