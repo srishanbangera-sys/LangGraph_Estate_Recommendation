@@ -126,7 +126,7 @@ export default function Sidebar({
             <span>•</span>
             <a href="#privacy" className="hover:text-slate-600 transition-colors">Privacy</a>
           </div>
-          <p className="pt-1 text-[10px] text-slate-400">© 2025, HomiGo, Inc.</p>
+          <p className="pt-1 text-[10px] text-slate-400">© 2025, PropPilot, Inc.</p>
         </div>
       </div>
     </aside>

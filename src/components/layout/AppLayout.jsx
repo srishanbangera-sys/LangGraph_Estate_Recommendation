@@ -50,7 +50,7 @@ export default function AppLayout() {
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <span className="font-bold text-lg text-slate-900">HomiGo</span>
+            <span className="font-bold text-lg text-slate-900">PropPilot</span>
             <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-600 rounded">AI</span>
           </div>
 

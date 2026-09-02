@@ -52,7 +52,7 @@ export async function streamLangGraphResponse({
           },
           config: {
             configurable: {
-              thread_id: 'homigo-session-1'
+              thread_id: 'proppilot-session-1'
             }
           }
         }),
