@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { INITIAL_PROPERTIES } from '../data/mockProperties';
 import { streamLangGraphResponse } from '../services/langgraphClient';
 import { extractParametersFromConversation, filterProperty } from '../utils/filterExtractor';
 import { getPropertyImage, getPropertyCoordinates } from '../utils/imageHelper';
 import { calculateInsights } from '../utils/insightsCalculator';
+import { syncClient } from '../services/syncClient';
 
 // Ensure all initial properties have visual assets and geographic coordinates
 const NORMALIZED_INITIAL_PROPERTIES = INITIAL_PROPERTIES.map((p, i) => ({
@@ -20,6 +21,17 @@ export function useLangGraphChat() {
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set(['prop-1', 'prop-4']));
   const [selectedProperty, setSelectedProperty] = useState(null);
   
+  // Real-time Map Center coordinates (Mangalore default)
+  const [currentMapLocation, setCurrentMapLocation] = useState({
+    lat: 12.9141,
+    lng: 74.8560,
+    zoom: 12
+  });
+
+  // Cross-device sync status: 'connected' | 'connecting' | 'disconnected'
+  const [syncStatus, setSyncStatus] = useState('disconnected');
+  const isRemoteSyncRef = useRef(false);
+
   // Navigation & View mode: 'feed' or 'dashboard'
   const [rightPanelMode, setRightPanelMode] = useState('feed'); // 'feed' | 'dashboard'
   const [activeNav, setActiveNav] = useState('chats'); // 'chats' | 'properties' | 'saved' | 'insights'
@@ -33,7 +45,48 @@ export function useLangGraphChat() {
     maxBudget: null
   });
 
-  const activeAbortRef = useRef(null);
+  // =========================================================================
+  // 🔄 REAL-TIME CROSS-DEVICE STATE SYNCHRONIZATION (WebSockets + BroadcastChannel)
+  // =========================================================================
+  useEffect(() => {
+    syncClient.connect();
+
+    const unsubscribe = syncClient.subscribe((remoteState, source) => {
+      isRemoteSyncRef.current = true;
+
+      if (remoteState.activeFilters) {
+        setActiveFilters(remoteState.activeFilters);
+      }
+      if (remoteState.savedPropertyIds && Array.isArray(remoteState.savedPropertyIds)) {
+        setSavedPropertyIds(new Set(remoteState.savedPropertyIds));
+      }
+      if (remoteState.messages && Array.isArray(remoteState.messages) && remoteState.messages.length > 0) {
+        setMessages(remoteState.messages);
+      }
+      if (remoteState.currentMapLocation) {
+        setCurrentMapLocation(remoteState.currentMapLocation);
+      }
+      if (remoteState.selectedPropertyId !== undefined) {
+        if (!remoteState.selectedPropertyId) {
+          setSelectedProperty(null);
+        } else {
+          const found = properties.find(p => p.id === remoteState.selectedPropertyId);
+          if (found) setSelectedProperty(found);
+        }
+      }
+
+      setTimeout(() => {
+        isRemoteSyncRef.current = false;
+      }, 80);
+    });
+
+    const unsubStatus = syncClient.subscribeStatus(setSyncStatus);
+
+    return () => {
+      unsubscribe();
+      unsubStatus();
+    };
+  }, [properties]);
 
   // Toggle bookmark / saved property
   const toggleSaveProperty = useCallback((propertyId) => {
@@ -44,23 +97,44 @@ export function useLangGraphChat() {
       } else {
         next.add(propertyId);
       }
+      if (!isRemoteSyncRef.current) {
+        syncClient.sendUpdate({ savedPropertyIds: Array.from(next) });
+      }
       return next;
     });
   }, []);
 
   // Filter removal helpers
   const clearFilter = useCallback((key) => {
-    setActiveFilters(prev => ({ ...prev, [key]: null }));
+    setActiveFilters(prev => {
+      const updated = { ...prev, [key]: null };
+      if (!isRemoteSyncRef.current) {
+        syncClient.sendUpdate({ activeFilters: updated });
+      }
+      return updated;
+    });
   }, []);
 
   const clearAllFilters = useCallback(() => {
-    setActiveFilters({
+    const emptyFilters = {
       bhk: null,
       location: null,
       propertyType: null,
       listingType: null,
       maxBudget: null
-    });
+    };
+    setActiveFilters(emptyFilters);
+    if (!isRemoteSyncRef.current) {
+      syncClient.sendUpdate({ activeFilters: emptyFilters });
+    }
+  }, []);
+
+  // Update map coordinates
+  const updateMapLocation = useCallback((newCoords) => {
+    setCurrentMapLocation(newCoords);
+    if (!isRemoteSyncRef.current) {
+      syncClient.sendUpdate({ currentMapLocation: newCoords });
+    }
   }, []);
 
   /**
@@ -76,8 +150,13 @@ export function useLangGraphChat() {
 
     // Pre-extract conversational filters from user message
     const userExtracted = extractParametersFromConversation(textToSend, '');
+    let updatedFilters = activeFilters;
     if (Object.keys(userExtracted).length > 0) {
-      setActiveFilters(prev => ({ ...prev, ...userExtracted }));
+      updatedFilters = { ...activeFilters, ...userExtracted };
+      setActiveFilters(updatedFilters);
+      if (!isRemoteSyncRef.current) {
+        syncClient.sendUpdate({ activeFilters: updatedFilters });
+      }
     }
 
     const userMessageId = `user-${Date.now()}`;
@@ -91,8 +170,8 @@ export function useLangGraphChat() {
     };
 
     // Append user message and placeholder assistant message
-    setMessages(prev => [
-      ...prev,
+    const nextMessages = [
+      ...messages,
       userMsg,
       {
         id: assistantMessageId,
@@ -101,12 +180,13 @@ export function useLangGraphChat() {
         isStreaming: true,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
-    ]);
+    ];
 
+    setMessages(nextMessages);
     setIsStreaming(true);
 
     // Call LangGraph Streaming API
-    const abortFn = await streamLangGraphResponse({
+    await streamLangGraphResponse({
       message: textToSend,
       history: messages,
       filters: userExtracted,
@@ -129,83 +209,41 @@ export function useLangGraphChat() {
 
         // Extract any additional filters inferred from assistant response
         const agentExtracted = extractParametersFromConversation(textToSend, fullResponse);
+        let finalFilters = updatedFilters;
         if (Object.keys(agentExtracted).length > 0) {
-          setActiveFilters(prev => ({ ...prev, ...agentExtracted }));
+          finalFilters = { ...updatedFilters, ...agentExtracted };
+          setActiveFilters(finalFilters);
         }
 
-        setMessages(prev => prev.map(msg => {
+        const completedMessages = nextMessages.map(msg => {
           if (msg.id === assistantMessageId) {
             return {
               ...msg,
               content: fullResponse,
               isStreaming: false,
-              recommendedIds: matchedPropertyIds
+              recommendedIds: matchedPropertyIds || []
             };
           }
           return msg;
-        }));
+        });
 
-        // Dynamically highlight or insert recommendations from backend / FAISS
-        if (matchedPropertyIds && matchedPropertyIds.length > 0) {
-          if (typeof matchedPropertyIds[0] === 'object') {
-            // Real FAISS vectorstore properties returned by agent.py
-            const mappedNewProps = matchedPropertyIds.map((item, idx) => {
-              const baseProp = {
-                id: item.property_id || `prop-retrieved-${idx}`,
-                title: item.title || 'Featured Property',
-                category: item.city ? `For you in ${item.city}` : 'Recommended',
-                type: item.property_type || 'Apartment',
-                location: item.area ? `${item.area}, ${item.city}` : (item.city || 'Prime Location'),
-                country: item.city || 'Real Estate',
-                price: Number(item.price) || 2500000,
-                priceFormatted: item.price 
-                  ? (Number(item.price) > 100000 ? `₹${Number(item.price).toLocaleString('en-IN')}` : `₹${Number(item.price).toLocaleString('en-IN')}/mo`)
-                  : 'Price on Request',
-                beds: Number(item.bhk) || 3,
-                baths: Number(item.bathrooms) || 2,
-                sqft: item.area_sqft ? `${item.area_sqft} sqft` : 'Spacious',
-                aiMatchScore: 96 - idx * 3,
-                tags: item.amenities ? item.amenities.split(';').slice(0, 3) : ['Verified', 'Prime'],
-                description: item.description || '',
-                amenities: item.amenities ? item.amenities.split(';') : ['Security', 'Modern'],
-                status: item.status || 'Available'
-              };
+        setMessages(completedMessages);
 
-              // Inject visual asset & coordinates
-              baseProp.image = getPropertyImage(baseProp, idx);
-              const coords = getPropertyCoordinates(baseProp, idx);
-              baseProp.lat = coords.lat;
-              baseProp.lng = coords.lng;
-
-              return baseProp;
-            });
-
-            setProperties(prev => {
-              const existingIds = new Set(mappedNewProps.map(p => p.id));
-              const remaining = prev.filter(p => !existingIds.has(p.id));
-              return [...mappedNewProps, ...remaining];
-            });
-          } else {
-            // String IDs (simulated engine)
-            setProperties(prev => {
-              const prioritized = [...prev].sort((a, b) => {
-                const aMatch = matchedPropertyIds.includes(a.id) ? 1 : 0;
-                const bMatch = matchedPropertyIds.includes(b.id) ? 1 : 0;
-                return bMatch - aMatch;
-              });
-              return prioritized;
-            });
-          }
+        // 🔄 Sync completed turn across devices
+        if (!isRemoteSyncRef.current) {
+          syncClient.sendUpdate({
+            messages: completedMessages,
+            activeFilters: finalFilters
+          });
         }
       },
       onError: (err) => {
-        console.error('LangGraph streaming error:', err);
         setIsStreaming(false);
         setMessages(prev => prev.map(msg => {
           if (msg.id === assistantMessageId) {
             return {
               ...msg,
-              content: "I apologize, but I encountered an error retrieving the latest real estate updates. Please try again.",
+              content: `⚠️ Error: ${err.message || 'Unable to connect to PropPilot agent. Please verify backend is running on port 8000.'}`,
               isStreaming: false,
               isError: true
             };
@@ -214,12 +252,19 @@ export function useLangGraphChat() {
         }));
       }
     });
+  }, [inputValue, isStreaming, messages, activeFilters]);
 
-    activeAbortRef.current = abortFn;
-  }, [inputValue, isStreaming, messages]);
+  // Derived filtered properties: strictly binds the feed and map
+  const filteredProperties = useMemo(() => {
+    return properties.filter(p => filterProperty(p, activeFilters));
+  }, [properties, activeFilters]);
 
-  // Click on prompt card: populate input or directly send
-  const handleSelectPrompt = useCallback((promptText, autoSend = true) => {
+  // Reactive telemetry subscriber for Insights
+  const insightsMetrics = useMemo(() => {
+    return calculateInsights(messages, activeFilters, filteredProperties);
+  }, [messages, activeFilters, filteredProperties]);
+
+  const handleSelectPrompt = useCallback((promptText, autoSend = false) => {
     if (autoSend) {
       handleSendMessage(promptText);
     } else {
@@ -227,28 +272,25 @@ export function useLangGraphChat() {
     }
   }, [handleSendMessage]);
 
-  // "+ New Chat" button reset
   const handleNewChat = useCallback(() => {
-    if (activeAbortRef.current) {
-      activeAbortRef.current();
-    }
     setMessages([]);
     setInputValue('');
     setIsStreaming(false);
-    setProperties(NORMALIZED_INITIAL_PROPERTIES);
-    setRightPanelMode('feed');
-    clearAllFilters();
-  }, [clearAllFilters]);
-
-  // Dynamically Filtered Properties for the 'For You' Feed and Interactive Map
-  const filteredProperties = useMemo(() => {
-    return properties.filter(p => filterProperty(p, activeFilters));
-  }, [properties, activeFilters]);
-
-  // Auto-updating Reactive Insights Metrics
-  const insightsMetrics = useMemo(() => {
-    return calculateInsights(messages, activeFilters, filteredProperties);
-  }, [messages, activeFilters, filteredProperties]);
+    setActiveFilters({
+      bhk: null,
+      location: null,
+      propertyType: null,
+      listingType: null,
+      maxBudget: null
+    });
+    if (!isRemoteSyncRef.current) {
+      syncClient.sendUpdate({
+        messages: [],
+        activeFilters: {},
+        selectedPropertyId: null
+      });
+    }
+  }, []);
 
   return {
     messages,
@@ -263,7 +305,15 @@ export function useLangGraphChat() {
     insightsMetrics,
     savedPropertyIds,
     selectedProperty,
-    setSelectedProperty,
+    setSelectedProperty: (prop) => {
+      setSelectedProperty(prop);
+      if (!isRemoteSyncRef.current) {
+        syncClient.sendUpdate({ selectedPropertyId: prop?.id || null });
+      }
+    },
+    currentMapLocation,
+    updateMapLocation,
+    syncStatus,
     rightPanelMode,
     setRightPanelMode,
     activeNav,
