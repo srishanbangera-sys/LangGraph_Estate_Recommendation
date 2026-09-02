@@ -6,7 +6,12 @@ import AnalyticsDashboard from '../dashboard/AnalyticsDashboard';
 import PropertyModal from '../recommendations/PropertyModal';
 import ProfileView from '../profile/ProfileView';
 import BottomNav from './BottomNav';
+import SellerCMS from '../seller/SellerCMS';
+import BrokerCMS from '../broker/BrokerCMS';
+import LoginModal from '../auth/LoginModal';
+import PermissionGuard from '../auth/PermissionGuard';
 import { useLangGraphChat } from '../../hooks/useLangGraphChat';
+import { useAuth } from '../../context/AuthContext';
 
 export default function AppLayout() {
   const {
@@ -33,7 +38,9 @@ export default function AppLayout() {
     toggleSaveProperty
   } = useLangGraphChat();
 
-  // Mobile navigation tab state: 'chat' | 'properties' | 'saved' | 'insights' | 'profile'
+  const { isAuthModalOpen, setIsAuthModalOpen, currentUser } = useAuth();
+
+  // Mobile navigation tab state: 'chat' | 'properties' | 'saved' | 'insights' | 'seller_cms' | 'broker_cms' | 'profile'
   const [mobileTab, setMobileTab] = useState('chat');
 
   const toggleDashboard = () => {
@@ -80,8 +87,8 @@ export default function AppLayout() {
                   onClick={() => setMobileTab('profile')}
                 >
                   <img
-                    src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=80&h=80&q=80"
-                    alt="John"
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
                     className="w-7 h-7 rounded-full object-cover ring-2 ring-slate-100"
                   />
                 </div>
@@ -161,13 +168,39 @@ export default function AppLayout() {
             </div>
           )}
 
-          {/* TAB 5: Profile & Menu */}
+          {/* TAB: Seller CMS Mobile View */}
+          {mobileTab === 'seller_cms' && (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <PermissionGuard requiredRole="seller">
+                <SellerCMS
+                  properties={properties}
+                  onBackToSearch={() => setMobileTab('chat')}
+                />
+              </PermissionGuard>
+            </div>
+          )}
+
+          {/* TAB: Broker CMS Mobile View */}
+          {mobileTab === 'broker_cms' && (
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <PermissionGuard requiredRole="broker">
+                <BrokerCMS
+                  properties={properties}
+                  onBackToSearch={() => setMobileTab('chat')}
+                />
+              </PermissionGuard>
+            </div>
+          )}
+
+          {/* TAB 5: Profile & Role Switcher */}
           {mobileTab === 'profile' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
               <ProfileView
                 savedCount={savedPropertyIds.size}
                 onOpenSaved={() => setMobileTab('saved')}
                 onOpenInsights={() => setMobileTab('insights')}
+                onOpenSellerCMS={() => setMobileTab('seller_cms')}
+                onOpenBrokerCMS={() => setMobileTab('broker_cms')}
                 onNewChat={() => {
                   handleNewChat();
                   setMobileTab('chat');
@@ -203,42 +236,68 @@ export default function AppLayout() {
           rightPanelMode={rightPanelMode}
         />
 
-        {/* Column 2: Middle Conversational AI Stage */}
-        <div className="flex-1 h-full min-w-0 flex flex-col border-r border-slate-100">
-          <ChatInterface
-            messages={messages}
-            inputValue={inputValue}
-            setInputValue={setInputValue}
-            isStreaming={isStreaming}
-            onSendMessage={handleSendMessage}
-            onSelectPrompt={handleSelectPrompt}
-            onResetChat={handleNewChat}
-            properties={filteredProperties}
-            onSelectProperty={(prop) => setSelectedProperty(prop)}
-          />
-        </div>
+        {/* Dynamic Main Workspace depending on activeNav */}
+        {activeNav === 'seller_cms' ? (
+          /* Dedicated Seller CMS View */
+          <div className="flex-1 h-full min-w-0 flex flex-col">
+            <PermissionGuard requiredRole="seller">
+              <SellerCMS
+                properties={properties}
+                onBackToSearch={() => setActiveNav('chats')}
+              />
+            </PermissionGuard>
+          </div>
+        ) : activeNav === 'broker_cms' ? (
+          /* Dedicated Regional Broker CMS View */
+          <div className="flex-1 h-full min-w-0 flex flex-col">
+            <PermissionGuard requiredRole="broker">
+              <BrokerCMS
+                properties={properties}
+                onBackToSearch={() => setActiveNav('chats')}
+              />
+            </PermissionGuard>
+          </div>
+        ) : (
+          /* Standard 2-Column AI Search Stage & Recommendations/Telemetry */
+          <>
+            {/* Column 2: Middle Conversational AI Stage */}
+            <div className="flex-1 h-full min-w-0 flex flex-col border-r border-slate-100">
+              <ChatInterface
+                messages={messages}
+                inputValue={inputValue}
+                setInputValue={setInputValue}
+                isStreaming={isStreaming}
+                onSendMessage={handleSendMessage}
+                onSelectPrompt={handleSelectPrompt}
+                onResetChat={handleNewChat}
+                properties={filteredProperties}
+                onSelectProperty={(prop) => setSelectedProperty(prop)}
+              />
+            </div>
 
-        {/* Column 3: Right Dynamic Recommendations or Analytics Dashboard */}
-        <div className="w-[390px] lg:w-[430px] xl:w-[470px] shrink-0 h-full bg-white flex flex-col">
-          {rightPanelMode === 'feed' ? (
-            <RecommendationFeed
-              properties={filteredProperties}
-              savedPropertyIds={savedPropertyIds}
-              activeFilters={activeFilters}
-              onClearFilter={clearFilter}
-              onClearAllFilters={clearAllFilters}
-              onToggleSave={toggleSaveProperty}
-              onSelectProperty={(prop) => setSelectedProperty(prop)}
-              onToggleDashboard={toggleDashboard}
-              rightPanelMode={rightPanelMode}
-            />
-          ) : (
-            <AnalyticsDashboard
-              onBackToFeed={() => setRightPanelMode('feed')}
-              insightsMetrics={insightsMetrics}
-            />
-          )}
-        </div>
+            {/* Column 3: Right Dynamic Recommendations or Analytics Dashboard */}
+            <div className="w-[390px] lg:w-[430px] xl:w-[470px] shrink-0 h-full bg-white flex flex-col">
+              {rightPanelMode === 'feed' ? (
+                <RecommendationFeed
+                  properties={filteredProperties}
+                  savedPropertyIds={savedPropertyIds}
+                  activeFilters={activeFilters}
+                  onClearFilter={clearFilter}
+                  onClearAllFilters={clearAllFilters}
+                  onToggleSave={toggleSaveProperty}
+                  onSelectProperty={(prop) => setSelectedProperty(prop)}
+                  onToggleDashboard={toggleDashboard}
+                  rightPanelMode={rightPanelMode}
+                />
+              ) : (
+                <AnalyticsDashboard
+                  onBackToFeed={() => setRightPanelMode('feed')}
+                  insightsMetrics={insightsMetrics}
+                />
+              )}
+            </div>
+          </>
+        )}
 
       </div>
 
@@ -254,6 +313,12 @@ export default function AppLayout() {
             setMobileTab('chat');
           }
         }}
+      />
+
+      {/* Role-Based Authentication Modal */}
+      <LoginModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
 
     </div>
