@@ -1,18 +1,37 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { INITIAL_PROPERTIES } from '../data/mockProperties';
 import { streamLangGraphResponse } from '../services/langgraphClient';
+import { extractParametersFromConversation, filterProperty } from '../utils/filterExtractor';
+import { getPropertyImage, getPropertyCoordinates } from '../utils/imageHelper';
+import { calculateInsights } from '../utils/insightsCalculator';
+
+// Ensure all initial properties have visual assets and geographic coordinates
+const NORMALIZED_INITIAL_PROPERTIES = INITIAL_PROPERTIES.map((p, i) => ({
+  ...p,
+  image: getPropertyImage(p, i),
+  ...getPropertyCoordinates(p, i)
+}));
 
 export function useLangGraphChat() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [properties, setProperties] = useState(INITIAL_PROPERTIES);
+  const [properties, setProperties] = useState(NORMALIZED_INITIAL_PROPERTIES);
   const [savedPropertyIds, setSavedPropertyIds] = useState(new Set(['prop-1', 'prop-4']));
   const [selectedProperty, setSelectedProperty] = useState(null);
   
   // Navigation & View mode: 'feed' or 'dashboard'
   const [rightPanelMode, setRightPanelMode] = useState('feed'); // 'feed' | 'dashboard'
   const [activeNav, setActiveNav] = useState('chats'); // 'chats' | 'properties' | 'saved' | 'insights'
+
+  // Conversational Active Filters: { bhk, location, propertyType, listingType, maxBudget }
+  const [activeFilters, setActiveFilters] = useState({
+    bhk: null,
+    location: null,
+    propertyType: null,
+    listingType: null,
+    maxBudget: null
+  });
 
   const activeAbortRef = useRef(null);
 
@@ -29,9 +48,24 @@ export function useLangGraphChat() {
     });
   }, []);
 
+  // Filter removal helpers
+  const clearFilter = useCallback((key) => {
+    setActiveFilters(prev => ({ ...prev, [key]: null }));
+  }, []);
+
+  const clearAllFilters = useCallback(() => {
+    setActiveFilters({
+      bhk: null,
+      location: null,
+      propertyType: null,
+      listingType: null,
+      maxBudget: null
+    });
+  }, []);
+
   /**
    * Main send message handler.
-   * Connects cleanly to the LangGraph streaming client.
+   * Connects cleanly to the LangGraph streaming client and synchronizes conversational state.
    */
   const handleSendMessage = useCallback(async (customText) => {
     const textToSend = (typeof customText === 'string' ? customText : inputValue).trim();
@@ -39,6 +73,12 @@ export function useLangGraphChat() {
 
     // Reset input immediately
     setInputValue('');
+
+    // Pre-extract conversational filters from user message
+    const userExtracted = extractParametersFromConversation(textToSend, '');
+    if (Object.keys(userExtracted).length > 0) {
+      setActiveFilters(prev => ({ ...prev, ...userExtracted }));
+    }
 
     const userMessageId = `user-${Date.now()}`;
     const assistantMessageId = `assistant-${Date.now() + 1}`;
@@ -69,7 +109,7 @@ export function useLangGraphChat() {
     const abortFn = await streamLangGraphResponse({
       message: textToSend,
       history: messages,
-      filters: {},
+      filters: userExtracted,
       onChunk: (chunk) => {
         setMessages(prev => prev.map(msg => {
           if (msg.id === assistantMessageId) {
@@ -86,6 +126,13 @@ export function useLangGraphChat() {
       },
       onComplete: (fullResponse, matchedPropertyIds) => {
         setIsStreaming(false);
+
+        // Extract any additional filters inferred from assistant response
+        const agentExtracted = extractParametersFromConversation(textToSend, fullResponse);
+        if (Object.keys(agentExtracted).length > 0) {
+          setActiveFilters(prev => ({ ...prev, ...agentExtracted }));
+        }
+
         setMessages(prev => prev.map(msg => {
           if (msg.id === assistantMessageId) {
             return {
@@ -102,32 +149,36 @@ export function useLangGraphChat() {
         if (matchedPropertyIds && matchedPropertyIds.length > 0) {
           if (typeof matchedPropertyIds[0] === 'object') {
             // Real FAISS vectorstore properties returned by agent.py
-            const mappedNewProps = matchedPropertyIds.map((item, idx) => ({
-              id: item.property_id || `prop-retrieved-${idx}`,
-              title: item.title || 'Featured Property',
-              category: item.city ? `For you in ${item.city}` : 'Recommended',
-              type: item.property_type || 'Apartment',
-              location: item.area ? `${item.area}, ${item.city}` : (item.city || 'Prime Location'),
-              country: item.city || 'Real Estate',
-              price: Number(item.price) || 2500000,
-              priceFormatted: item.price 
-                ? (Number(item.price) > 100000 ? `₹${Number(item.price).toLocaleString('en-IN')}` : `₹${Number(item.price).toLocaleString('en-IN')}/mo`)
-                : 'Price on Request',
-              beds: Number(item.bhk) || 3,
-              baths: Number(item.bathrooms) || 2,
-              sqft: item.area_sqft ? `${item.area_sqft} sqft` : 'Spacious',
-              image: [
-                'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80',
-                'https://images.unsplash.com/photo-1613977257363-707ba9348227?auto=format&fit=crop&w=800&q=80',
-                'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-                'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80'
-              ][idx % 4],
-              aiMatchScore: 96 - idx * 3,
-              tags: item.amenities ? item.amenities.split(';').slice(0, 3) : ['Verified', 'Prime'],
-              description: item.description || '',
-              amenities: item.amenities ? item.amenities.split(';') : ['Security', 'Modern'],
-              status: item.status || 'Available'
-            }));
+            const mappedNewProps = matchedPropertyIds.map((item, idx) => {
+              const baseProp = {
+                id: item.property_id || `prop-retrieved-${idx}`,
+                title: item.title || 'Featured Property',
+                category: item.city ? `For you in ${item.city}` : 'Recommended',
+                type: item.property_type || 'Apartment',
+                location: item.area ? `${item.area}, ${item.city}` : (item.city || 'Prime Location'),
+                country: item.city || 'Real Estate',
+                price: Number(item.price) || 2500000,
+                priceFormatted: item.price 
+                  ? (Number(item.price) > 100000 ? `₹${Number(item.price).toLocaleString('en-IN')}` : `₹${Number(item.price).toLocaleString('en-IN')}/mo`)
+                  : 'Price on Request',
+                beds: Number(item.bhk) || 3,
+                baths: Number(item.bathrooms) || 2,
+                sqft: item.area_sqft ? `${item.area_sqft} sqft` : 'Spacious',
+                aiMatchScore: 96 - idx * 3,
+                tags: item.amenities ? item.amenities.split(';').slice(0, 3) : ['Verified', 'Prime'],
+                description: item.description || '',
+                amenities: item.amenities ? item.amenities.split(';') : ['Security', 'Modern'],
+                status: item.status || 'Available'
+              };
+
+              // Inject visual asset & coordinates
+              baseProp.image = getPropertyImage(baseProp, idx);
+              const coords = getPropertyCoordinates(baseProp, idx);
+              baseProp.lat = coords.lat;
+              baseProp.lng = coords.lng;
+
+              return baseProp;
+            });
 
             setProperties(prev => {
               const existingIds = new Set(mappedNewProps.map(p => p.id));
@@ -184,9 +235,20 @@ export function useLangGraphChat() {
     setMessages([]);
     setInputValue('');
     setIsStreaming(false);
-    setProperties(INITIAL_PROPERTIES);
+    setProperties(NORMALIZED_INITIAL_PROPERTIES);
     setRightPanelMode('feed');
-  }, []);
+    clearAllFilters();
+  }, [clearAllFilters]);
+
+  // Dynamically Filtered Properties for the 'For You' Feed and Interactive Map
+  const filteredProperties = useMemo(() => {
+    return properties.filter(p => filterProperty(p, activeFilters));
+  }, [properties, activeFilters]);
+
+  // Auto-updating Reactive Insights Metrics
+  const insightsMetrics = useMemo(() => {
+    return calculateInsights(messages, activeFilters, filteredProperties);
+  }, [messages, activeFilters, filteredProperties]);
 
   return {
     messages,
@@ -194,6 +256,11 @@ export function useLangGraphChat() {
     setInputValue,
     isStreaming,
     properties,
+    filteredProperties,
+    activeFilters,
+    clearFilter,
+    clearAllFilters,
+    insightsMetrics,
     savedPropertyIds,
     selectedProperty,
     setSelectedProperty,
