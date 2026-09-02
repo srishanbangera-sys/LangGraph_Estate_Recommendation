@@ -30,10 +30,12 @@ export default function CleanMarkdownText({
     }
   }
 
-  // Strip code blocks wrapping JSON
-  text = text.replace(/```(?:json)?\s*[\{\[](?:.|\n)*?[\}\]]\s*```/gi, '');
+  // Strip code blocks wrapping JSON or incomplete streaming JSON
+  text = text.replace(/```(?:json)?\s*[\{\[][\s\S]*?(?:$|```)/gi, '');
   text = text.replace(/data:\s*\{.*?\}\n?/g, '');
+  text = text.replace(/\{\s*"tool_calls?[\s\S]*?(?:\}\}|\]\}|\}$)/g, '');
   text = text.replace(/\{"tool_call".*?\}/g, '');
+  text = text.replace(/\n{3,}/g, '\n\n');
 
   // 2. Extract suggested next steps / follow-up prompts into action chips
   const actionChips = [];
@@ -184,7 +186,13 @@ export default function CleanMarkdownText({
 function formatInlineHighlight(text = '') {
   if (!text) return '';
 
-  const parts = text.split(/(\*\*.*?\*\*)/g);
+  let safeText = text;
+  const starMatches = safeText.match(/\*\*/g);
+  if (starMatches && starMatches.length % 2 !== 0) {
+    safeText += '**';
+  }
+
+  const parts = safeText.split(/(\*\*.*?\*\*)/g);
   return parts.map((part, i) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       const inner = part.slice(2, -2);

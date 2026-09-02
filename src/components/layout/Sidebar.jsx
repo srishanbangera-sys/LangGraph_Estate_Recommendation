@@ -102,14 +102,15 @@ export default function Sidebar({
     document.body.style.userSelect = 'none';
 
     const handleMouseMove = (moveEvent) => {
-      const newWidth = Math.max(190, Math.min(moveEvent.clientX, 480));
+      const maxAllowed = Math.min(window.innerWidth * 0.36, 440);
+      const newWidth = Math.max(200, Math.min(moveEvent.clientX, maxAllowed));
       if (setSidebarWidth) {
         setSidebarWidth(newWidth);
         try {
           localStorage.setItem('proppilot_sidebar_width', newWidth.toString());
         } catch {}
       }
-      if (isCollapsed && setIsCollapsed && newWidth > 100) {
+      if (isCollapsed && setIsCollapsed && newWidth > 120) {
         setIsCollapsed(false);
       }
     };
@@ -126,18 +127,14 @@ export default function Sidebar({
     window.addEventListener('mouseup', handleMouseUp);
   };
 
-  const currentWidthStyle = isMobile 
-    ? 'w-full' 
-    : isCollapsed 
-    ? 'w-[72px]' 
-    : `${sidebarWidth || 260}px`;
-
   return (
     <aside 
       ref={sidebarRef}
       style={!isMobile && !isCollapsed ? { width: `${sidebarWidth || 260}px` } : {}}
-      className={`bg-white border-r border-slate-100 flex flex-col justify-between shrink-0 h-full select-none relative transition-all duration-150 ${
-        isMobile ? 'w-full p-6' : isCollapsed ? 'w-[72px] p-3' : 'p-6'
+      className={`bg-white border-r border-slate-100 flex flex-col justify-between shrink-0 h-full select-none relative overflow-hidden min-w-0 ${
+        isDragging ? 'transition-none' : 'transition-all duration-150'
+      } ${
+        isMobile ? 'w-full p-6' : isCollapsed ? 'w-[72px] min-w-[72px] max-w-[72px] p-3' : 'p-6 min-w-[200px] max-w-[440px]'
       }`}
     >
       {/* Top Section: Header, Logo, Collapse Toggle & Nav */}

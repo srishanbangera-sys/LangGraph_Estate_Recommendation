@@ -31,6 +31,18 @@ class CrossDeviceSyncClient {
         console.warn('BroadcastChannel not supported or disabled', e);
       }
     }
+
+    // Auto-reconnect on phone wake / network recovery
+    if (typeof window !== 'undefined') {
+      window.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && (!this.ws || this.ws.readyState !== WebSocket.OPEN)) {
+          this.connect(this.sessionId);
+        }
+      });
+      window.addEventListener('online', () => {
+        this.connect(this.sessionId);
+      });
+    }
   }
 
   getWebSocketUrl() {

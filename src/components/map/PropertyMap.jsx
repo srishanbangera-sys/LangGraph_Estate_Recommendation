@@ -210,12 +210,15 @@ export default function PropertyMap({
   };
 
   return (
-    <div className={`relative rounded-2xl overflow-hidden shadow-inner border border-slate-200 touch-pan-x touch-pan-y ${className}`}>
+    <div 
+      style={{ isolation: 'isolate' }}
+      className={`relative rounded-2xl overflow-hidden shadow-inner border border-slate-200 touch-pan-x touch-pan-y ${className}`}
+    >
       {/* Map Container */}
       <div ref={mapContainerRef} className="w-full h-full min-h-[300px]" />
 
       {/* Floating Center Badge */}
-      <div className="absolute top-3 left-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-100 flex items-center space-x-2">
+      <div className="absolute top-3 left-3 z-[500] bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-100 flex items-center space-x-2">
         <MapPin className="w-3.5 h-3.5 text-indigo-600" />
         <span className="text-xs font-bold text-slate-800">Mangalore, India</span>
         <span className="text-[10px] text-slate-400 font-medium">({properties.length} mapped)</span>
@@ -225,7 +228,7 @@ export default function PropertyMap({
       <button
         onClick={handleResetToMangalore}
         title="Recenter Map to Mangalore"
-        className="absolute bottom-3 right-3 z-[1000] bg-white hover:bg-slate-50 text-slate-700 p-2 rounded-xl shadow-md border border-slate-100 transition-all"
+        className="absolute bottom-3 right-3 z-[500] bg-white hover:bg-slate-50 text-slate-700 p-2 rounded-xl shadow-md border border-slate-100 transition-all"
       >
         <Navigation className="w-4 h-4 text-indigo-600" />
       </button>
